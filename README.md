@@ -1,5 +1,7 @@
 # Array Partition
 
+[![PyPI version](https://badge.fury.io/py/ArrayPartition.svg)](https://pypi.python.org/pypi/ArrayPartition/)
+
 Required submodule for other libraries:
  - CFAPyX
  - XarrayActive

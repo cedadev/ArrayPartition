@@ -1,7 +1,7 @@
 class TestConsistency:
 
     def test_core(self):
-        from ArrayPartition import (
+        from arraypartition import (
             ArrayLike,
             SuperLazyArrayLike,
             ArrayPartition,

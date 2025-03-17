@@ -191,12 +191,12 @@ class ArrayPartition(SuperLazyArrayLike):
     description = "Complete Array-like object with all proper methods for data retrieval."
 
     def __init__(self,
-                 filename,
-                 address,
-                 shape=None,
-                 position=None,
-                 extent=None,
-                 format=None,
+                 filename: str,
+                 address: str,
+                 shape: Union[tuple,None] = None,
+                 position: Union[tuple,None] = None,
+                 extent: Union[tuple,None] = None,
+                 format: Union[str,None] = None,
                  **kwargs
             ):
         
@@ -241,6 +241,10 @@ class ArrayPartition(SuperLazyArrayLike):
         self.format   = format
         self.position = position
 
+        if shape is None:
+            # Identify shape
+            shape = tuple(self._get_array().shape)
+
         self._lock    = SerializableLock()
 
         super().__init__(shape, **kwargs)
@@ -258,9 +262,6 @@ class ArrayPartition(SuperLazyArrayLike):
                         defined by the ``extent`` parameter.
         """
 
-        # Unexplained xarray behaviour:
-        # If using xarray indexing, __array__ should not have a positional 'dtype' option.
-        # If casting DataArray to numpy, __array__ requires a positional 'dtype' option.
         dtype = None
         if args:
             dtype = args[0]
@@ -269,6 +270,34 @@ class ArrayPartition(SuperLazyArrayLike):
             raise ValueError(
                 'Requested datatype does not match this chunk'
             )
+
+        array = self._get_array(*args)
+        
+        if hasattr(array, 'units'):
+            self.units = array.units
+        
+        if len(array.shape) != len(self._extent):
+            self._correct_slice(array.dimensions)
+
+        try:
+            var = np.array(array[tuple(self._extent)], dtype=self.dtype)
+        except IndexError:
+            raise ValueError(
+                f"Unable to select required 'extent' of {self.extent} "
+                f"from fragment {self.position} with shape {array.shape}"
+            )
+
+        return self._post_process_data(var)
+    
+    def _get_array(self, *args):
+        """
+        Base private function to get the data array object.
+        
+        Can be used to extract the shape and dtype if not known.
+        """
+        # Unexplained xarray behaviour:
+        # If using xarray indexing, __array__ should not have a positional 'dtype' option.
+        # If casting DataArray to numpy, __array__ requires a positional 'dtype' option.
 
         ds = self.open()
 
@@ -291,24 +320,9 @@ class ArrayPartition(SuperLazyArrayLike):
                 f"Dask Chunk at '{self.position}' does not contain "
                 f"the variable '{varname}'."
             )
-        
-        if hasattr(array, 'units'):
-            self.units = array.units
-        
-        if len(array.shape) != len(self._extent):
-            self._correct_slice(array.dimensions)
+        return array
 
-        try:
-            var = np.array(array[tuple(self._extent)], dtype=self.dtype)
-        except IndexError:
-            raise ValueError(
-                f"Unable to select required 'extent' of {self.extent} "
-                f"from fragment {self.position} with shape {array.shape}"
-            )
-
-        return self._post_process_data(var)
-    
-    def _correct_slice(self, array_dims):
+    def _correct_slice(self, array_dims: tuple):
         """
         Drop size-1 dimensions from the set of slices if there is an issue.
 
@@ -337,17 +351,20 @@ class ArrayPartition(SuperLazyArrayLike):
                 )
         self._extent = extent
             
-    def _post_process_data(self, data):
+    def _post_process_data(self, data: np.array):
         """
-        Perform any post-processing steps on the data here. Method to be 
-        overriden by inherrited classes (CFAPyX.CFAPartition and 
-        XarrayActive.ActivePartition)
+        Perform any post-processing steps on the data here. 
+        
+        Method to be overriden by inherrited classes (CFAPyX.CFAPartition 
+        and XarrayActive.ActivePartition)
         """
         return data
 
-    def _try_openers(self, filename):
+    def _try_openers(self, filename: str):
         """
-        Attempt to open the dataset using all possible methods. Currently only NetCDF is supported.
+        Attempt to open the dataset using all possible methods. 
+        
+        Currently only NetCDF is supported.
         """
         for open in [
             self._open_netcdf,
@@ -364,13 +381,13 @@ class ArrayPartition(SuperLazyArrayLike):
             )
         return ds
     
-    def _open_pp(self, filename):
+    def _open_pp(self, filename: str):
         raise NotImplementedError
 
-    def _open_um(self, filename):
+    def _open_um(self, filename: str):
         raise NotImplementedError
 
-    def _open_netcdf(self, filename):
+    def _open_netcdf(self, filename: str):
         """
         Open a NetCDF file using the netCDF4 python package."""
         return netCDF4.Dataset(filename, mode='r')
@@ -386,12 +403,14 @@ class ArrayPartition(SuperLazyArrayLike):
             'format': self.format
         } | super().get_kwargs()
     
-    def copy(self, extent=None):
+    def copy(self, extent: Union[tuple,None] = None):
         """
-        Create a new instance of this class with all attributes of the current instance, but
-        with a new initial extent made by combining the current instance extent with the ``newextent``.
-        Each ArrayLike class must overwrite this class to get the best performance with multiple 
-        slicing operations.
+        Create a new instance of this class with all attributes of the current instance.
+        
+        The copy has annew initial extent made by combining the current instance 
+        extent with the ``newextent``.
+        Each ArrayLike class must overwrite this class to get the best performance 
+        with multiple slicing operations.
         """
         kwargs = self.get_kwargs()
         if extent:
@@ -406,7 +425,9 @@ class ArrayPartition(SuperLazyArrayLike):
 
     def open(self):
         """
-        Open the source file for this chunk to extract data. Multiple file locations may be provided
+        Open the source file for this chunk to extract data. 
+        
+        Multiple file locations may be provided
         for this object, in which case there is a priority for 'remote' sources first, followed by 
         'local' sources - otherwise the order is as given in the fragment array variable ``location``.
         """
@@ -446,7 +467,23 @@ class ArrayPartition(SuperLazyArrayLike):
             f'Locations tried: {filenames}.'
         )
     
-def _identical_extents(old, new, dshape):
+def _identical_extents(
+        old: slice, 
+        new: slice, 
+        dshape: int):
+    """
+    Determine if two slices match precisely.
+
+    :param old:     (slice) Current slice applied to the dimension.
+    
+    :param new:     (slice) New slice to be combined with the old slice.
+        
+    :param dshape:     (int) Total size of the given dimension.
+    """
+
+    if isinstance(new, int):
+        new = slice(new, new+1)
+
     ostart = old.start or 0
     ostop  = old.stop or dshape
     ostep  = old.step or 1
@@ -459,9 +496,14 @@ def _identical_extents(old, new, dshape):
            (ostop == nstop) and \
            (ostep == nstep)
 
-def get_chunk_space(chunk_shape, shape):
+def get_chunk_space(
+        chunk_shape: tuple, 
+        shape: tuple
+    ) -> tuple:
     """
-    Derive the chunk space from the ratio between the chunk shape and array shape in
+    Derive the chunk space in each dimension.
+
+    Calculated from the ratio between the chunk shape and array shape in
     each dimension. Chunk space is the number of chunks in each dimension which is 
     referred to as a ``space`` because it effectively represents the lengths of the each
     dimension in 'chunk space' rather than any particular chunk coordinate. 
@@ -481,12 +523,22 @@ def get_chunk_space(chunk_shape, shape):
         ...
         and so on.
 
+    :param chunk_shape:     (tuple) The shape of each chunk in array space.
+
+    :param shape:           (tuple) The total array shape in array space - 
+        alternatively the total array space size.
+
     """
 
     space = tuple([math.ceil(i/j) for i, j in zip(shape, chunk_shape)])
     return space
 
-def get_chunk_shape(chunks, shape, dims, chunk_limits=True):
+def get_chunk_shape(
+        chunks: dict,
+        shape: tuple, 
+        dims: tuple, 
+        chunk_limits: bool = True
+    ) -> tuple:
     """
     Calculate the chunk shape from the user-provided ``chunks`` parameter,
     the array shape and named dimensions, and apply chunk limits if enabled.
@@ -532,10 +584,19 @@ def get_chunk_shape(chunks, shape, dims, chunk_limits=True):
 
     return tuple(chunk_shape)
 
-def get_chunk_positions(chunk_space):
+def get_chunk_positions(
+        chunk_space: tuple
+    ) -> list[tuple]:
     """
-    Get the list of chunk positions in ``chunk space`` given the size
-    of the space.
+    Get the list of chunk positions in ``chunk space``.
+    
+    Given the size of the space, list all possible positions
+    within the space. A space of ``(1,1)`` has a single possible
+    position; ``(0,0)``, whereas a space of ``(2,2)`` has four
+    positions: ``(0,0)``,``(0,1)``,``(1,0)`` and ``(1,1)``.
+
+    :param chunk_space:     (tuple) The total size of the space in
+        all dimensions
     """
     origin = [0 for i in chunk_space]
 
@@ -547,10 +608,23 @@ def get_chunk_positions(chunk_space):
 
     return positions
 
-def get_chunk_extent(position, shape, chunk_space):
+def get_chunk_extent(
+        position: tuple, 
+        shape: tuple, 
+        chunk_space: tuple
+    ) -> tuple:
     """
-    Get the extent of a particular chunk within the space given its position,
-    the array shape and the extent of the chunk space.
+    Get the extent of a particular chunk within the space.
+    
+    Given its position, the array shape and the extent of the 
+    chunk space, find the extent of a particular chunk.
+
+    :param position:    (tuple) The position of the chunk in chunk space.
+
+    :param shape:       (tuple) The total array shape for the whole chunk space.
+        
+    :param chunk_space: (tuple) The size of the chunk space (number of chunks
+        in each dimension).
     """
     extent = []
     for dim in range(len(position)):
@@ -568,11 +642,12 @@ def get_chunk_extent(position, shape, chunk_space):
     return extent
 
 def get_dask_chunks(
-        array_space,
-        fragment_space,
-        extent,
-        dtype, 
-        explicit_shapes=None):
+        array_space: tuple,
+        fragment_space: tuple,
+        extent: tuple,
+        dtype: np.dtype, 
+        explicit_shapes: Union[tuple,None] = None
+    ) -> tuple:
     """
     Define the `chunks` array passed to Dask when creating a Dask Array. This is an array of fragment sizes 
     per dimension for each of the relevant dimensions. Copied from cf-python version 3.14.0 onwards.
@@ -719,7 +794,7 @@ def combine_slices(
     else:
         for dim in range(len(newslice)):
             if not _identical_extents(extent[dim], newslice[dim], shape[dim]):
-                extent[dim] = combine_sliced_dim(extent[dim], newslice[dim], dim)
+                extent[dim] = combine_sliced_dim(extent[dim], newslice[dim], shape, dim)
         return extent
     
 def normalize_partition_chunks(

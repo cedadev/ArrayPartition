@@ -1,24 +1,22 @@
-[build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-requires-python=">=3.7"
-name="ArrayPartition"
-version="1.0.1"
-dynamic = ["dependencies"]
-authors = [{name = "Daniel Westwood", email = "daniel.westwood@stfc.ac.uk"}]
-readme = "README.md"
+name = "arraypartition"
+version = "1.1.0"
 description = "Container module for ArrayLike Partition class behaviour"
-license = {file = "LICENSE"}
-keywords = ["array","class","CFAPyX","XarrayActive"]
+authors = [
+    {name = "Daniel Westwood",email = "daniel.westwood@stfc.ac.uk"}
+]
+license = {text = "BSD 3"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "dask>=2024",
+    "numpy (<=2.0.2)",
+    "netcdf4 (>=1.7.2,<2.0.0)"
+]
 
-[project.urls]
-Repository = "https://github.com/dwest77a/ArrayPartition.git"
-Documentation = "https://html-preview.github.io/?url=https://github.com/dwest77a/ArrayPartition/blob/main/docs/build/html/index.html"
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-#[tool.setuptools.dynamic]
-#dependencies = {file = ["requirements.txt"]}
-
-[tool.setuptools]
-packages = ["arraypartition"]
+[tool.poetry.group.dev.dependencies]
+pytest = "7.1.2"

@@ -10,11 +10,7 @@ import math
 from dask.utils import SerializableLock
 from dask.array.core import normalize_chunks
 
-try:
-    from XarrayActive import ActiveChunk
-except:
-    class ActiveChunk:
-        pass
+from typing import Union
 
 class ArrayLike:
     """
@@ -22,7 +18,13 @@ class ArrayLike:
     """
     description = 'Container class for Array-Like behaviour'
 
-    def __init__(self, shape, units=None, dtype=None, source_shape=None):
+    def __init__(
+            self, 
+            shape: tuple, 
+            units: Union[str,None] = None, 
+            dtype: Union[np.dtype,None] = None,
+            source_shape: Union[tuple,None] = None
+        ):
 
         # Standard parameters to store for array-like behaviour
         self.shape = shape
@@ -180,10 +182,11 @@ class SuperLazyArrayLike(ArrayLike):
             'named_dims': self.named_dims
         } | super().get_kwargs()
 
-class ArrayPartition(ActiveChunk, SuperLazyArrayLike):
+class ArrayPartition(SuperLazyArrayLike):
     """
     Complete Array-like object with all proper methods for data retrieval.
-    May include methods from ``XarrayActive.ActiveChunk`` if installed."""
+
+    Overridden in Active-enabled packages."""
 
     description = "Complete Array-like object with all proper methods for data retrieval."
 
@@ -640,11 +643,66 @@ def get_dask_chunks(
 
     return normalize_chunks(fsizes_per_dim, shape=array_space, dtype=dtype)
 
-def combine_slices(shape, extent, newslice):
+def combine_sliced_dim(
+        old: slice, 
+        new: slice,
+        shape: tuple,
+        dim: int
+    ) -> slice:
+    """
+    Combine slices for a given dimension.
+    
+    :param old:     (slice) Current slice applied to the dimension.
+    
+    :param new:     (slice) New slice to be combined with the old slice.
+    
+    :param shape:   (tuple) The shape of the native array, before 
+        application of any slices.
+        
+    :param dim:     (int) Integer index of the dimension in the array.
+    """
+
+    if isinstance(new, int):
+        new = slice(new, new+1)
+
+    ostart = old.start or 0
+    ostop  = old.stop or shape[dim]
+    ostep  = old.step or 1
+
+    osize = (ostop - ostart)/ostep
+
+    nstart = new.start or 0
+    nstop  = new.stop or shape[dim]
+    nstep  = new.step or 1
+
+    nsize = (nstop - nstart)/nstep
+
+    if nsize > osize:
+        raise IndexError(
+            f'Attempted to slice dimension "{dim}" with new slice "({nstart},{nstop},{nstep})'
+            f'but the dimension size is limited to {osize}.'
+        )
+
+    start = ostart + ostep*nstart
+    step  = ostep * nstep
+    stop  = start + step * (nstop - nstart)
+    
+    return slice(start, stop, step)
+
+def combine_slices(
+        shape: tuple[int], 
+        extent: tuple[slice], 
+        newslice: tuple[slice,int]
+    ) -> tuple[slice]:
     """
     Combine existing ``extent`` attribute with a new set of slices.
 
-    :param newslice:        (tuple) A set of slices to apply to the data 
+    :param shape:       (tuple) The native source shape of the array.
+
+    :param extent:      (tuple) The current set of slices recorded
+        for this data selection but not yet applied.
+
+    :param newslice:    (tuple) A set of slices to apply to the data 
         'Super-Lazily', i.e the slices will be combined with existing information
         and applied later in the process.
 
@@ -652,36 +710,9 @@ def combine_slices(shape, extent, newslice):
     """
 
     if len(newslice) != len(shape):
-
         raise ValueError(
             "Compute chain broken - dimensions have been reduced already."
         )
-    
-    def combine_sliced_dim(old, new, dim):
-
-        ostart = old.start or 0
-        ostop  = old.stop or shape[dim]
-        ostep  = old.step or 1
-
-        osize = (ostop - ostart)/ostep
-
-        nstart = new.start or 0
-        nstop  = new.stop or shape[dim]
-        nstep  = new.step or 1
-
-        nsize = (nstop - nstart)/nstep
-
-        if nsize > osize:
-            raise IndexError(
-                f'Attempted to slice dimension "{dim}" with new slice "({nstart},{nstop},{nstep})'
-                f'but the dimension size is limited to {osize}.'
-            )
-
-        start = ostart + ostep*nstart
-        step  = ostep * nstep
-        stop  = start + step * (nstop - nstart)
-        
-        return slice(start, stop, step)
 
     if not extent:
         return newslice
@@ -691,7 +722,24 @@ def combine_slices(shape, extent, newslice):
                 extent[dim] = combine_sliced_dim(extent[dim], newslice[dim], dim)
         return extent
     
-def normalize_partition_chunks(chunks, shape, dtype, named_dims):
+def normalize_partition_chunks(
+        chunks: dict, 
+        shape: tuple[int], 
+        dtype: np.dtype, 
+        named_dims: list
+    ):
+    """
+    Prepare information for dask to normalise chunks.
+
+    :param chunks:      (dict) Dictionary of named dimensions and their number
+        of partitions across different sources.
+
+    :param shape:       (tuple) The total shape of the array in all dimensions.
+
+    :param dtype:       (np.dtype) The data type for this array.
+
+    :param named_dims:  (list) The set of named dimensions for this array.
+    """
         
     chunk_values = []
 
@@ -703,6 +751,8 @@ def normalize_partition_chunks(chunks, shape, dtype, named_dims):
             chunk_values.append(int(chunks[nd]))
         except ValueError:
             chunk_values.append(chunks[nd])
+
+    # Construct chunk values for each named dimension
 
     return normalize_chunks(
         chunk_values,

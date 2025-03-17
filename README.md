@@ -1,5 +1,6 @@
 # Array Partition
 
+![Static Badge](https://img.shields.io/badge/Xarray%20Engine%20Component-1E4B23)
 [![PyPI version](https://badge.fury.io/py/ArrayPartition.svg)](https://pypi.python.org/pypi/ArrayPartition/)
 
 Required submodule for other libraries:

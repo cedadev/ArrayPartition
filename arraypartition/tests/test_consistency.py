@@ -4,7 +4,10 @@ class TestConsistency:
         from arraypartition import (
             ArrayLike,
             SuperLazyArrayLike,
-            ArrayPartition,
+            ArrayPartition
+        )
+
+        from arraypartition.partition import (
             get_chunk_space,
             get_chunk_shape,
             get_chunk_positions,

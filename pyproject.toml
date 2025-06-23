@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.9,<4.0"
 dependencies = [
     "dask (>=2024)",
-    "numpy (<=1.26.4)",
-    "netcdf4 (<=1.6.5)"
+    "numpy (<=3.0.0)",
+    "netcdf4 (<=2.0.0)"
 ]
 
 [build-system]

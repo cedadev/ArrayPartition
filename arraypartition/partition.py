@@ -266,10 +266,12 @@ class ArrayPartition(SuperLazyArrayLike):
         if args:
             dtype = args[0]
 
-        if dtype and dtype != self.dtype:
-            raise ValueError(
-                'Requested datatype does not match this chunk'
-            )
+        # Allow casting to alternate dtypes. Native dtype
+        # is no longer enforced.
+        #if dtype and dtype != self.dtype:
+        #    raise ValueError(
+        #        'Requested datatype does not match this chunk'
+        #    )
 
         array = self._get_array(*args)
         
@@ -280,7 +282,9 @@ class ArrayPartition(SuperLazyArrayLike):
             self._correct_slice(array.dimensions)
 
         try:
-            var = np.array(array[tuple(self._extent)], dtype=self.dtype)
+            # Still allowed to request a specific dtype 
+            # Otherwise dtype casting prevented
+            var = np.array(array[tuple(self._extent)], dtype=dtype)
         except IndexError:
             raise ValueError(
                 f"Unable to select required 'extent' of {self.extent} "
@@ -315,6 +319,10 @@ class ArrayPartition(SuperLazyArrayLike):
 
         try:
             array = ds.variables[varname]
+            # Disable auto mask/scaling - implemented by Xarray
+            if self.format == 'nc':
+                array.set_auto_maskandscale(False)
+                # only added in netCDF4-python v1.2.8
         except KeyError:
             raise ValueError(
                 f"Dask Chunk at '{self.position}' does not contain "

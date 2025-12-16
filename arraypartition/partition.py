@@ -153,6 +153,9 @@ class SuperLazyArrayLike(ArrayLike):
         
         smoothextent = []
         for x, ext in enumerate(extent):
+            if isinstance(ext, int):
+                smoothextent.append(ext)
+                continue
             start = ext.start or 0
             stop  = ext.stop or self.shape[x]
             step  = ext.step or 1
@@ -801,7 +804,9 @@ def combine_slices(
         return newslice
     else:
         for dim in range(len(newslice)):
-            if not _identical_extents(extent[dim], newslice[dim], shape[dim]):
+            if isinstance(newslice[dim],int):
+                extent[dim] = getattr(extent[dim],'start',None) or 0 + newslice[dim]*(getattr(extent[dim],'step',None) or 1)
+            elif not _identical_extents(extent[dim], newslice[dim], shape[dim]):
                 extent[dim] = combine_sliced_dim(extent[dim], newslice[dim], shape, dim)
         return extent
     

@@ -1,6 +1,6 @@
 [project]
 name = "arraypartition"
-version = "1.3.0a0"
+version = "1.3.0b0"
 description = "Container module for ArrayLike Partition class behaviour"
 authors = [
     {name = "Daniel Westwood",email = "daniel.westwood@stfc.ac.uk"}

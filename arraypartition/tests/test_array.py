@@ -22,7 +22,7 @@ class TestArray:
 
         assert ap.shape == (20,20), "Shape Error"
 
-        assert (np.array(array_part)[5][0] - 0.463) < 0.001, "Data Error"
+        assert (np.array(array_part)[0][5][0] - 0.463) < 0.001, "Data Error"
         assert (np.array(ap)[5][0] - 0.803) < 0.001, "Data Error"
 
 if __name__ == '__main__':

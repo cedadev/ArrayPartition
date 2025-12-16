@@ -119,6 +119,10 @@ class SuperLazyArrayLike(ArrayLike):
         if not self._extent:
             return self._shape
         for d, e in enumerate(self._extent):
+
+            if isinstance(e, int):
+                continue
+            
             start = e.start or 0
             stop  = e.stop or self._shape[d]
             step  = e.step or 1

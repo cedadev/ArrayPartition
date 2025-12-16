@@ -20,10 +20,10 @@ class TestArray:
         
         ap = array_part[0, slice(100,120), slice(100,120)]
 
-        assert ap.shape == (1,20,20), "Shape Error"
+        assert ap.shape == (20,20), "Shape Error"
 
-        assert (np.array(array_part)[0][5][0] - 0.463) < 0.001, "Data Error"
-        assert (np.array(ap)[0][5][0] - 0.803) < 0.001, "Data Error"
+        assert (np.array(array_part)[5][0] - 0.463) < 0.001, "Data Error"
+        assert (np.array(ap)[5][0] - 0.803) < 0.001, "Data Error"
 
 if __name__ == '__main__':
     TestArray().test_array()

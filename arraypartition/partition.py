@@ -151,6 +151,10 @@ class SuperLazyArrayLike(ArrayLike):
         values derived from the current shape.
         """
         if len(extent) != self.ndim:
+            # Ignore dimensions that have already been dropped
+            extent = [e for e in extent if isinstance(e,slice)]
+
+        if len(extent) != self.ndim:
             raise ValueError(
                 'Direct assignment of truncated extent is not supported.'
             )
@@ -204,6 +208,7 @@ class ArrayPartition(SuperLazyArrayLike):
                  position: Union[tuple,None] = None,
                  extent: Union[tuple,None] = None,
                  format: Union[str,None] = None,
+                 dropped_extent: Union[tuple,None] = None,
                  **kwargs
             ):
         
@@ -256,7 +261,13 @@ class ArrayPartition(SuperLazyArrayLike):
 
         super().__init__(shape, **kwargs)
 
+        self._dropped_extent = dropped_extent or [None for i in shape]
+
         if extent:
+            for x, ext in enumerate(extent):
+                if isinstance(ext, int):
+                    self._dropped_extent[x] = ext
+
             # Apply a specific extent if given by the initiator
             self.set_extent(extent)
     
@@ -285,13 +296,18 @@ class ArrayPartition(SuperLazyArrayLike):
         if hasattr(array, 'units'):
             self.units = array.units
         
+        apply_ext = self._extent
         if len(array.shape) != len(self._extent):
-            self._correct_slice(array.dimensions)
+            apply_ext = self._correct_slice(array.dimensions)
+
+        print(f'Applying Extent {apply_ext} to {self.address}')
+        print(array)
+        print(self.filename)
 
         try:
             # Still allowed to request a specific dtype 
             # Otherwise dtype casting prevented
-            var = np.array(array[tuple(self._extent)], dtype=dtype)
+            var = np.array(array[tuple(apply_ext)], dtype=dtype)
         except IndexError:
             raise ValueError(
                 f"Unable to select required 'extent' of {self.extent} "
@@ -347,24 +363,19 @@ class ArrayPartition(SuperLazyArrayLike):
             dimensions from the ``extent`` if possible.
         """
         extent = []
-        for dim in range(len(self.named_dims)):
+        dimcount = 0
+        for dim in range(len(self._dropped_extent)):
+
+            if self._dropped_extent[dim] is not None:
+                extent.append(self._dropped_extent[dim])
+                continue
+
             named_dim = self.named_dims[dim]
             if named_dim in array_dims:
-                extent.append(self._extent[dim])
+                extent.append(self._extent[dimcount])
 
-            # named dim not present
-            ext = self._extent[dim]
-            
-            start = ext.start or 0 
-            stop  = ext.stop or self.shape[dim]
-            step  = ext.step or 1
-
-            if int(stop - start)/step > 1:
-                raise ValueError(
-                    f'Attempted to slice dimension "{named_dim}" using slice "{ext}" '
-                    'but the requested dimension is not present'
-                )
-        self._extent = extent
+            dimcount += 1
+        return extent
             
     def _post_process_data(self, data: np.array):
         """
@@ -415,7 +426,8 @@ class ArrayPartition(SuperLazyArrayLike):
             'shape': self.shape,
             'position': self.position,
             'extent': self._extent,
-            'format': self.format
+            'format': self.format,
+            'dropped_extent':self._dropped_extent
         } | super().get_kwargs()
     
     def copy(self, extent: Union[tuple,None] = None):
